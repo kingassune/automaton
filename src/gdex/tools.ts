@@ -10,8 +10,15 @@ import { GdexClient, TradeRateLimiter } from "./client.js";
 import { resolveGdexConfig } from "./config.js";
 import { logModification } from "../self-mod/audit-log.js";
 
-// Shared rate limiter (singleton per process)
-const rateLimiter = new TradeRateLimiter(10);
+// Shared rate limiter (singleton per process, initialized lazily with config value)
+let rateLimiter: TradeRateLimiter | null = null;
+
+function getRateLimiter(maxTradesPerHour: number): TradeRateLimiter {
+  if (!rateLimiter || rateLimiter.maxTradesPerHour !== maxTradesPerHour) {
+    rateLimiter = new TradeRateLimiter(maxTradesPerHour);
+  }
+  return rateLimiter;
+}
 
 /**
  * Check survival tier and return an error string if trading should be blocked.
@@ -26,13 +33,13 @@ function checkSurvivalTier(tier: SurvivalTier | string): string | null {
 /**
  * Get or throw GDEX client from context config.
  */
-function getClient(ctx: Parameters<AutomatonTool["execute"]>[1]): { client: GdexClient; maxTradeSizeUsd: number } | string {
+function getClient(ctx: Parameters<AutomatonTool["execute"]>[1]): { client: GdexClient; maxTradeSizeUsd: number; maxTradesPerHour: number } | string {
   const gdexConfig = resolveGdexConfig(ctx.config);
   if (!gdexConfig) {
     return "GDEX not configured: set GDEX_PRIVATE_KEY environment variable or gdexPrivateKey in config";
   }
   const client = new GdexClient(gdexConfig.apiUrl, gdexConfig.privateKey);
-  return { client, maxTradeSizeUsd: gdexConfig.maxTradeSizeUsd };
+  return { client, maxTradeSizeUsd: gdexConfig.maxTradeSizeUsd, maxTradesPerHour: gdexConfig.maxTradesPerHour };
 }
 
 /**
@@ -154,7 +161,7 @@ export function createGdexTools(): AutomatonTool[] {
           },
           amount_usd: {
             type: "number",
-            description: "Amount in USD to spend (max $5 by default)",
+            description: "Amount in USD to spend (respects gdexMaxTradeSizeUsd config)",
           },
           slippage_percent: {
             type: "number",
@@ -168,13 +175,14 @@ export function createGdexTools(): AutomatonTool[] {
         const tierErr = checkSurvivalTier(getCurrentTier(ctx));
         if (tierErr) return tierErr;
 
-        // Rate limit check
-        const rateErr = rateLimiter.check();
-        if (rateErr) return rateErr;
-
         const result = getClient(ctx);
         if (typeof result === "string") return result;
-        const { client, maxTradeSizeUsd } = result;
+        const { client, maxTradeSizeUsd, maxTradesPerHour } = result;
+
+        // Rate limit check
+        const limiter = getRateLimiter(maxTradesPerHour);
+        const rateErr = limiter.check();
+        if (rateErr) return rateErr;
 
         const amountUsd = args.amount_usd as number;
         if (amountUsd <= 0) return "amount_usd must be positive";
@@ -200,7 +208,7 @@ export function createGdexTools(): AutomatonTool[] {
         );
 
         if (tradeResult.success) {
-          rateLimiter.record();
+          limiter.record();
           return [
             `✓ Buy order executed on ${chain}`,
             `Token: ${tokenAddress}`,
@@ -250,13 +258,14 @@ export function createGdexTools(): AutomatonTool[] {
         const tierErr = checkSurvivalTier(getCurrentTier(ctx));
         if (tierErr) return tierErr;
 
-        // Rate limit check
-        const rateErr = rateLimiter.check();
-        if (rateErr) return rateErr;
-
         const result = getClient(ctx);
         if (typeof result === "string") return result;
-        const { client } = result;
+        const { client, maxTradesPerHour } = result;
+
+        // Rate limit check
+        const limiter = getRateLimiter(maxTradesPerHour);
+        const rateErr = limiter.check();
+        if (rateErr) return rateErr;
 
         const chain = args.chain as string;
         const tokenAddress = args.token_address as string;
@@ -283,7 +292,7 @@ export function createGdexTools(): AutomatonTool[] {
         );
 
         if (tradeResult.success) {
-          rateLimiter.record();
+          limiter.record();
           return [
             `✓ Sell order executed on ${chain}`,
             `Token: ${tokenAddress}`,
@@ -384,13 +393,14 @@ export function createGdexTools(): AutomatonTool[] {
         const tierErr = checkSurvivalTier(getCurrentTier(ctx));
         if (tierErr) return tierErr;
 
-        // Rate limit check
-        const rateErr = rateLimiter.check();
-        if (rateErr) return rateErr;
-
         const result = getClient(ctx);
         if (typeof result === "string") return result;
-        const { client, maxTradeSizeUsd } = result;
+        const { client, maxTradeSizeUsd, maxTradesPerHour } = result;
+
+        // Rate limit check
+        const limiter = getRateLimiter(maxTradesPerHour);
+        const rateErr = limiter.check();
+        if (rateErr) return rateErr;
 
         const amountUsd = args.amount_usd as number;
         if (amountUsd > maxTradeSizeUsd) {
@@ -420,7 +430,7 @@ export function createGdexTools(): AutomatonTool[] {
         );
 
         if (tradeResult.success) {
-          rateLimiter.record();
+          limiter.record();
           return [
             `✓ Limit ${side} order placed on ${args.chain}`,
             `Token: ${args.token_address}`,

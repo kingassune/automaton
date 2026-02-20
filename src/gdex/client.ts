@@ -46,6 +46,17 @@ export interface CopyTradeParams {
   maxPositionUsd?: number;
 }
 
+/** One hour in milliseconds. */
+const ONE_HOUR_MS = 60 * 60 * 1000;
+
+/**
+ * Extract an auth token string from a session/auth response object.
+ * The GDEX SDK and direct API may return the token under different keys.
+ */
+function extractAuthToken(res: Record<string, any>): string {
+  return res.token || res.apiKey || res.jwt || "";
+}
+
 export class GdexClient {
   private apiUrl: string;
   private privateKey: string;
@@ -70,7 +81,7 @@ export class GdexClient {
       const sdk = await this.tryLoadSdk();
       if (sdk) {
         const session = await sdk.createAuthenticatedSession(this.privateKey);
-        const token: string = session.token || session.apiKey || session.jwt || "";
+        const token = extractAuthToken(session);
         if (token) {
           this.authToken = token;
           return this.authToken;
@@ -84,7 +95,7 @@ export class GdexClient {
     const res = await this.post("/v1/auth/login", {
       privateKey: this.privateKey,
     });
-    this.authToken = res.token || res.apiKey || res.jwt || "";
+    this.authToken = extractAuthToken(res);
     return this.authToken ?? "";
   }
 
@@ -319,8 +330,8 @@ export class GdexClient {
 
   private async tryLoadSdk(): Promise<any | null> {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-implied-eval
-      const sdk = await (Function('return import("gdex.pro-sdk")')() as Promise<any>);
+      // @ts-ignore — gdex.pro-sdk may not be installed; optional dependency
+      const sdk = await import("gdex.pro-sdk");
       return sdk;
     } catch {
       return null;
@@ -390,7 +401,7 @@ export class GdexClient {
  */
 export class TradeRateLimiter {
   private tradeTimestamps: number[] = [];
-  private maxTradesPerHour: number;
+  readonly maxTradesPerHour: number;
 
   constructor(maxTradesPerHour: number) {
     this.maxTradesPerHour = maxTradesPerHour;
@@ -402,7 +413,7 @@ export class TradeRateLimiter {
    */
   check(): string | null {
     const now = Date.now();
-    const oneHourAgo = now - 60 * 60 * 1000;
+    const oneHourAgo = now - ONE_HOUR_MS;
 
     // Remove timestamps older than 1 hour
     this.tradeTimestamps = this.tradeTimestamps.filter(
