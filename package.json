@@ -52,7 +52,11 @@
     "simple-git": "^3.24.0",
     "ulid": "^2.3.0",
     "viem": "^2.44.2",
-    "yaml": "^2.4.0"
+    "yaml": "^2.4.0",
+    "gdex.pro-sdk": "latest",
+    "ethers": "^6.16.0",
+    "@solana/web3.js": "^1.98.4",
+    "bs58": "^6.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

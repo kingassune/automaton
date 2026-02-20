@@ -13,6 +13,7 @@ import type {
   ToolCallResult,
   GenesisConfig,
 } from "../types.js";
+import { createGdexTools } from "../gdex/tools.js";
 
 // ─── Self-Preservation Guard ───────────────────────────────────
 
@@ -1501,6 +1502,9 @@ Model: ${ctx.inference.getDefaultModel()}
         return `x402 fetch succeeded:\n${responseStr}`;
       },
     },
+
+    // ── GDEX Trading Tools ──
+    ...createGdexTools(),
   ];
 }
 

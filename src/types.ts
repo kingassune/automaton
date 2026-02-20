@@ -54,6 +54,12 @@ export interface AutomatonConfig {
   maxChildren: number;
   parentAddress?: Address;
   socialRelayUrl?: string;
+  // GDEX trading configuration
+  gdexPrivateKey?: string;
+  gdexApiUrl?: string;
+  gdexDefaultChain?: string;
+  gdexMaxTradeSizeUsd?: number;
+  gdexMaxTradesPerHour?: number;
 }
 
 export const DEFAULT_CONFIG: Partial<AutomatonConfig> = {
@@ -243,6 +249,7 @@ export interface ModificationEntry {
 export type ModificationType =
   | "code_edit"
   | "tool_install"
+  | "tool_use"
   | "mcp_install"
   | "config_change"
   | "port_expose"
@@ -646,3 +653,43 @@ export interface GenesisConfig {
 }
 
 export const MAX_CHILDREN = 3;
+
+// ─── GDEX Trading ────────────────────────────────────────────────
+
+export interface GdexTradeResult {
+  success: boolean;
+  txHash?: string;
+  chain: string;
+  tokenAddress: string;
+  amountUsd: number;
+  error?: string;
+  timestamp: string;
+}
+
+export interface GdexTokenInfo {
+  address: string;
+  symbol: string;
+  name: string;
+  chain: string;
+  priceUsd: number;
+  volume24h?: number;
+  marketCap?: number;
+}
+
+export interface GdexBalance {
+  chain: string;
+  address: string;
+  balances: { token: string; symbol: string; amount: number; valueUsd: number }[];
+  totalValueUsd: number;
+}
+
+export interface GdexPosition {
+  chain: string;
+  tokenAddress: string;
+  symbol: string;
+  amount: number;
+  entryPriceUsd: number;
+  currentPriceUsd: number;
+  pnlUsd: number;
+  pnlPercent: number;
+}
